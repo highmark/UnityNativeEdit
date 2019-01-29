@@ -308,6 +308,8 @@ public class EditBox {
             }
             else if (returnKeyType.equals("Done")) {
                 imeOptions |= EditorInfo.IME_ACTION_DONE;
+            } else if (returnKeyType.equals("Go")) {
+                imeOptions |= EditorInfo.IME_ACTION_GO;
             }
             edit.setImeOptions(imeOptions);
 

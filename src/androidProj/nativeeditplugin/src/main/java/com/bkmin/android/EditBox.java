@@ -58,6 +58,7 @@ public class EditBox {
     private static final String MSG_SET_TEXTSIZE = "SetTextSize";
     private static final String MSG_SET_FOCUS = "SetFocus";
     private static final String MSG_SET_VISIBLE = "SetVisible";
+    private static final String MSG_SET_SECURE = "SetSecure";
     private static final String MSG_TEXT_CHANGE = "TextChange";
     private static final String MSG_TEXT_BEGIN_EDIT = "TextBeginEdit";
     private static final String MSG_TEXT_END_EDIT = "TextEndEdit";
@@ -157,6 +158,10 @@ public class EditBox {
                 case MSG_ANDROID_KEY_DOWN:
                     String strKey = jsonMsg.getString("key");
                     this.OnForceAndroidKeyDown(strKey);
+                    break;
+                case MSG_SET_SECURE:
+                    boolean isSecure = jsonMsg.getBoolean("isSecure");
+                    SetSecure(isSecure);
                     break;
             }
 

@@ -58,7 +58,8 @@ public class NativeEditBox : PluginMsgReceiver
 	{
 		Default,
 		Next,
-		Done
+		Done,
+        Go
 	}
 		
 	public bool	withDoneButton = true;
@@ -68,6 +69,7 @@ public class NativeEditBox : PluginMsgReceiver
 
 	public bool updateRectEveryFrame;
 	public bool useInputFieldFont;
+    public bool unsetFocusOnReturn;
 	public UnityEngine.Events.UnityEvent OnReturnPressed;
 	public UnityEngine.Events.UnityEvent OnBeginEditing;
 
@@ -77,14 +79,16 @@ public class NativeEditBox : PluginMsgReceiver
 	private Text objUnityText;
 	private bool focusOnCreate;
 	private bool visibleOnCreate = true;
+    private Canvas objParentCanvas = null;
+    private string nativeText = null;
 
 	private const string MSG_CREATE = "CreateEdit";
 	private const string MSG_REMOVE = "RemoveEdit";
 	private const string MSG_SET_TEXT = "SetText";
 	private const string MSG_SET_RECT = "SetRect";
-	private const string MSG_SET_TEXTSIZE = "SetTextSize";
 	private const string MSG_SET_FOCUS = "SetFocus";
 	private const string MSG_SET_VISIBLE = "SetVisible";
+    private const string MSG_SET_SECURE = "SetSecure";
 	private const string MSG_TEXT_CHANGE = "TextChange";
 	private const string MSG_TEXT_BEGIN_EDIT = "TextBeginEdit";
 	private const string MSG_TEXT_END_EDIT = "TextEndEdit";
@@ -106,7 +110,7 @@ public class NativeEditBox : PluginMsgReceiver
 		}
 	}
 
-	public static Rect GetScreenRectFromRectTransform(RectTransform rectTransform)
+	public Rect GetScreenRectFromRectTransform(RectTransform rectTransform)
 	{
 		Vector3[] corners = new Vector3[4];
 		
@@ -119,9 +123,14 @@ public class NativeEditBox : PluginMsgReceiver
 		
 		for (int i = 0; i < 4; i++)
 		{
+            Camera camera = null;
+            if (objParentCanvas != null) {
+                camera = objParentCanvas.worldCamera;
+            }
+
 			// For Canvas mode Screen Space - Overlay there is no Camera; best solution I've found
 			// is to use RectTransformUtility.WorldToScreenPoint) with a null camera.
-			Vector3 screenCoord = RectTransformUtility.WorldToScreenPoint(null, corners[i]);
+			Vector3 screenCoord = RectTransformUtility.WorldToScreenPoint(camera, corners[i]);
 			
 			if (screenCoord.x < xMin)
 				xMin = screenCoord.x;
@@ -133,6 +142,7 @@ public class NativeEditBox : PluginMsgReceiver
 				yMax = screenCoord.y;
 		}
 		Rect result = new Rect(xMin, Screen.height - yMax, xMax - xMin, yMax - yMin);
+        //Debug.Log(xMin + " " + xMax);
 		return result;
 	}
 
@@ -175,22 +185,26 @@ public class NativeEditBox : PluginMsgReceiver
 
 	protected override void OnDestroy()
 	{
-		RemoveNative();
+        if (bNativeEditCreated) 
+		    RemoveNative();
 
-		base.OnDestroy();
+    	base.OnDestroy();
 	}
 
 	private void OnApplicationFocus(bool hasFocus)
 	{
-		if (!bNativeEditCreated || !this.Visible)
-			return;
+		// if (!bNativeEditCreated || !this.Visible)
+		// 	return;
 
-		this.SetVisible(hasFocus);
+		// this.SetVisible(hasFocus);
 	}
 
 	private IEnumerator InitializeOnNextFrame()
 	{
 		yield return null;
+
+        // Doing this here gives a chance for a dynamically added input field to be instantiated and then added to the canvas hierarchy.
+        objParentCanvas = objUnityInput.GetComponentInParent<Canvas>();
 
 		this.PrepareNativeEdit();
 		#if (UNITY_IPHONE || UNITY_ANDROID) && !UNITY_EDITOR
@@ -213,6 +227,10 @@ public class NativeEditBox : PluginMsgReceiver
 		{
 			SetRectNative(this.objUnityText.rectTransform);
 		}
+
+        if (nativeText != objUnityInput.text) {
+            this.SetTextNative(objUnityInput.text);
+        }
 	}
 
 	private void PrepareNativeEdit()
@@ -244,6 +262,7 @@ public class NativeEditBox : PluginMsgReceiver
 		if (newText == this.objUnityInput.text)
 			return;
 		
+        this.nativeText = newText;
 		this.objUnityInput.text = newText;
 		if (this.objUnityInput.onValueChanged != null)
 			this.objUnityInput.onValueChanged.Invoke(newText);
@@ -274,6 +293,7 @@ public class NativeEditBox : PluginMsgReceiver
 		}
 		else if (msg.Equals(MSG_TEXT_BEGIN_EDIT))
 		{
+            PluginMsgHandler.getInst().currentSelectedInput = this;
 			if (this.OnBeginEditing != null)
 				this.OnBeginEditing.Invoke();
 		}
@@ -284,6 +304,9 @@ public class NativeEditBox : PluginMsgReceiver
 		}
 		else if (msg.Equals(MSG_RETURN_PRESSED))
 		{
+            if (this.unsetFocusOnReturn) {
+                this.SetFocus(false);
+            }
 			if (returnPressed != null)
 				returnPressed();
 			if (OnReturnPressed != null)
@@ -346,6 +369,10 @@ public class NativeEditBox : PluginMsgReceiver
 				jsonMsg["return_key_type"] = "Done";
 				break;
 
+            case ReturnKeyType.Go:
+				jsonMsg["return_key_type"] = "Go";
+				break;
+
 			default:
 				jsonMsg["return_key_type"] = "Default";
 				break;
@@ -364,9 +391,11 @@ public class NativeEditBox : PluginMsgReceiver
 	private void SetTextNative(string newText)
 	{
 		JsonObject jsonMsg = new JsonObject();
+
+        nativeText = newText;
 		
 		jsonMsg["msg"] = MSG_SET_TEXT;
-		jsonMsg["text"] = newText ?? string.Empty;
+		jsonMsg["text"] = nativeText ?? string.Empty;;
 
 		this.SendPluginMsg(jsonMsg);
 	}
@@ -381,26 +410,18 @@ public class NativeEditBox : PluginMsgReceiver
 
 	public void SetRectNative(RectTransform rectTrans)
 	{
-		var rectScreen = GetScreenRectFromRectTransform(rectTrans);
+		Rect rectScreen = GetScreenRectFromRectTransform(rectTrans);
 
-		var jsonMsg = new JsonObject();
+		JsonObject jsonMsg = new JsonObject();
+		
 		jsonMsg["msg"] = MSG_SET_RECT;
+
 		jsonMsg["x"] = rectScreen.x / Screen.width;
 		jsonMsg["y"] = rectScreen.y / Screen.height;
 		jsonMsg["width"] = rectScreen.width / Screen.width;
 		jsonMsg["height"] = rectScreen.height / Screen.height;
-		this.SendPluginMsg(jsonMsg);
 
-		var fontRectHeightRatio = rectScreen.height / this.objUnityText.rectTransform.rect.height;
-		var fontSize = this.objUnityText.fontSize * fontRectHeightRatio;
-		if (Math.Abs(this.mConfig.fontSize - fontSize) > 0.1f)
-		{
-			var sizeMsg = new JsonObject();
-			sizeMsg["msg"] = MSG_SET_TEXTSIZE;
-			sizeMsg["fontSize"] = fontSize;
-			this.SendPluginMsg(sizeMsg);
-			this.mConfig.fontSize = fontSize;
-		}
+		this.SendPluginMsg(jsonMsg);
 	}
 
 	public void SetFocus(bool bFocus)
@@ -448,6 +469,13 @@ public class NativeEditBox : PluginMsgReceiver
 
 		this.Visible = bVisible;
 	}
+
+    public void SetSecure(bool bSecure) {
+        JsonObject jsonMsg = new JsonObject();
+        jsonMsg["msg"] = MSG_SET_SECURE;
+        jsonMsg["isSecure"] = bSecure;
+        this.SendPluginMsg(jsonMsg);
+    }
 
 	#if UNITY_ANDROID && !UNITY_EDITOR
 	private void ForceSendKeydown_Android(string key)

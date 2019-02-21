@@ -41,6 +41,18 @@ bool approxEqualFloat(float x, float y)
     }
 }
 
+// Override hitTest so that touches against this view outside any of input fields don't count. We need to do this to keep Unity's multitouch working.
+- (UIView *)hitTest:(CGPoint)point withEvent:(UIEvent *)event
+{
+    UIView *view = [super hitTest:point withEvent:event];
+    if ([view isDescendantOfView:self] && view != self && !view.hidden && view.userInteractionEnabled)
+    {
+        // return active edit box
+        return view;
+    }
+    return nil;
+}
+
 @end
 
 
@@ -153,10 +165,6 @@ bool approxEqualFloat(float x, float y)
     {
         [self setRect:jsonMsg];
     }
-    else if ([msg isEqualToString:MSG_SET_TEXTSIZE])
-    {
-        [self setTextSize:jsonMsg];
-    }
     else if ([msg isEqualToString:MSG_SET_FOCUS])
     {
         BOOL isFocus = [jsonMsg getBool:@"isFocus"];
@@ -166,6 +174,11 @@ bool approxEqualFloat(float x, float y)
     {
         BOOL isVisible = [jsonMsg getBool:@"isVisible"];
         [self setVisible:isVisible];
+    }
+    else if ([msg isEqualToString:MSG_SET_SECURE])
+    {
+        BOOL isSecure = [jsonMsg getBool:@"isSecure"];
+        [self setSecure:isSecure];
     }
     
     return jsonRet;
@@ -192,26 +205,6 @@ bool approxEqualFloat(float x, float y)
     x -= editView.superview.frame.origin.x;
     y -= editView.superview.frame.origin.y;
     editView.frame = CGRectMake(x, y, width, height);
-}
-
--(void) setTextSize:(JsonObject*)json
-{
-    float fontSize = [json getFloat:@"fontSize"];
-    // Conversion for retina displays
-    fontSize = fontSize / [UIScreen mainScreen].scale;
-    
-    if([editView isKindOfClass:[UITextField class]])
-    {
-        UITextField *textField = ((UITextField*)editView);
-        UIFont *newFont = [[textField font] fontWithSize:fontSize];
-        [textField setFont:newFont];
-    }
-    else if([editView isKindOfClass:[UITextView class]])
-    {
-        UITextView *textView = ((UITextView*)editView);
-        UIFont *newFont = [[textView font] fontWithSize:fontSize];
-        [textView setFont:newFont];
-    }
 }
 
 -(void) create:(JsonObject*)json
@@ -361,6 +354,10 @@ bool approxEqualFloat(float x, float y)
     else if ([returnKeyTypeString isEqualToString:@"Done"])
     {
         returnKeyType = UIReturnKeyDone;
+    }
+    else if ([returnKeyTypeString isEqualToString:@"Go"])
+    {
+        returnKeyType = UIReturnKeyGo;
     }
     
     // Conversion for retina displays
@@ -514,6 +511,11 @@ bool approxEqualFloat(float x, float y)
     editView.hidden = !isVisible;
 }
 
+-(void) setSecure:(bool)isSecure
+{
+    [(UITextField *)editView setSecureTextEntry:isSecure];
+}
+
 #pragma mark - Common callbacks
 
 -(void) onTextChange:(NSString*) text
@@ -606,14 +608,25 @@ bool approxEqualFloat(float x, float y)
     if (![editView isFirstResponder]) return;
     
     NSDictionary* keyboardInfo = [notification userInfo];
-    NSValue* keyboardFrameBegin = [keyboardInfo valueForKey:UIKeyboardFrameBeginUserInfoKey];
-    rectKeyboardFrame = [keyboardFrameBegin CGRectValue];
+    NSValue* keyboardFrame = [keyboardInfo valueForKey:UIKeyboardFrameEndUserInfoKey];
+    rectKeyboardFrame = [keyboardFrame CGRectValue];
+    
+    JsonObject* jsonToUnity = [[JsonObject alloc] init];
+    [jsonToUnity setString:@"msg" value:MSG_KEYBOARD_SHOW];
+    [jsonToUnity setBool:@"show" value:true];
+    [jsonToUnity setFloat:@"keyheight" value:rectKeyboardFrame.size.height / UIScreen.mainScreen.bounds.size.height];
+    [self sendJsonToUnity:jsonToUnity];
 }
 
 -(void) keyboardWillHide:(NSNotification*)notification
 {
     if (![editView isFirstResponder])
         return;
+
+    JsonObject* jsonToUnity = [[JsonObject alloc] init];
+    [jsonToUnity setString:@"msg" value:MSG_KEYBOARD_SHOW];
+    [jsonToUnity setBool:@"show" value:false];
+    [self sendJsonToUnity:jsonToUnity];
 }
 
 -(float) getKeyboardheight

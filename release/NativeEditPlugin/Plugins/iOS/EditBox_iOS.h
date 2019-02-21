@@ -10,13 +10,14 @@
 #define MSG_SET_TEXT @"SetText"
 #define MSG_GET_TEXT @"GetText"
 #define MSG_SET_RECT @"SetRect"
-#define MSG_SET_TEXTSIZE @"SetTextSize"
 #define MSG_SET_FOCUS @"SetFocus"
 #define MSG_SET_VISIBLE @"SetVisible"
+#define MSG_SET_SECURE @"SetSecure"
 #define MSG_TEXT_CHANGE @"TextChange"
 #define MSG_TEXT_BEGIN_EDIT @"TextBeginEdit"
 #define MSG_TEXT_END_EDIT @"TextEndEdit"
 #define MSG_RETURN_PRESSED @"ReturnPressed"
+#define MSG_KEYBOARD_SHOW @"ShowKeyboard"
 
 @interface EditBoxHoldView : UIView
 {

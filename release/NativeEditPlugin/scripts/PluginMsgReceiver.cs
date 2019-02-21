@@ -2,7 +2,7 @@
 
 public abstract class PluginMsgReceiver : MonoBehaviour
 {
-	private	int		nReceiverId;
+	private	int?		nReceiverId = null;
 
 	protected virtual void Start()
 	{
@@ -11,12 +11,18 @@ public abstract class PluginMsgReceiver : MonoBehaviour
 
 	protected virtual void OnDestroy()
 	{
-		PluginMsgHandler.getInst().RemoveReceiver(nReceiverId);
+        if (nReceiverId != null) {
+		    PluginMsgHandler.getInst().RemoveReceiver((int)nReceiverId);
+        }
 	}
 
 	protected JsonObject SendPluginMsg(JsonObject jsonMsg)
 	{
-		return PluginMsgHandler.getInst().SendMsgToPlugin(nReceiverId, jsonMsg);
+        if (nReceiverId != null) {
+		    return PluginMsgHandler.getInst().SendMsgToPlugin((int)nReceiverId, jsonMsg);
+        } else {
+            throw new System.InvalidOperationException("Attempted to send a NativeEdit plugin msg for a PluginMsgReceiver that has not been initialized.");
+        }
 	}
 
 	public abstract void OnPluginMsgDirect(JsonObject jsonMsg);  

@@ -50,6 +50,8 @@ public class PluginMsgHandler : MonoBehaviour {
 	private static bool   ENABLE_WRITE_LOG = false;
 	private static GameObject instance;
 
+    public NativeEditBox currentSelectedInput = null;
+
 	private bool IsEditor {
 		get {
 			#if UNITY_EDITOR
@@ -164,7 +166,7 @@ public class PluginMsgHandler : MonoBehaviour {
 		{
 			bool bShow = jsonMsg.GetBool("show");
 			int nKeyHeight = (int)( jsonMsg.GetFloat("keyheight") * (float) Screen.height);
-			//FileLog(string.Format("keyshow {0} height {1}", bShow, nKeyHeight));
+			//Debug.Log(string.Format("keyshow {0} height {1}", bShow, nKeyHeight));
 			if (OnShowKeyboard != null) 
 			{
 				OnShowKeyboard(bShow, nKeyHeight);
